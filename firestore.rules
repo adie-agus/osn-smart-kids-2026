@@ -41,7 +41,6 @@ service cloud.firestore {
       allow get: if true;
       allow create: if isSignedIn() && isValidLeaderboardEntry(request.resource.data);
       allow update: if isSignedIn() 
-        && request.auth.uid == resource.data.userId
         && isValidLeaderboardEntry(request.resource.data);
       allow delete: if false;
     }

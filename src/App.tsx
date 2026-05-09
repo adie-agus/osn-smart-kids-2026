@@ -1111,9 +1111,13 @@ export default function App() {
       setIsSubmitting(true);
       try {
         const { db } = fb;
+        const trimmedName = userProfile.name.trim();
+        const trimmedSchool = userProfile.school.trim();
+        const trimmedGrade = userProfile.grade.trim();
         const currentSubject = subject?.toUpperCase() || 'UMUM';
+        
         // Unique ID based on name, school, grade, and subject
-        const docId = `${userProfile.name}_${userProfile.school}_${userProfile.grade}_${currentSubject}`.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const docId = `${trimmedName}_${trimmedSchool}_${trimmedGrade}_${currentSubject}`.toLowerCase().replace(/[^a-z0-9]/g, '_');
         const docRef = doc(db, 'leaderboard', docId);
 
         await runTransaction(db, async (transaction) => {
@@ -1121,9 +1125,9 @@ export default function App() {
           if (!sfDoc.exists()) {
             transaction.set(docRef, {
               userId: firebaseUser.uid,
-              name: userProfile.name,
-              school: userProfile.school,
-              grade: userProfile.grade,
+              name: trimmedName,
+              school: trimmedSchool,
+              grade: trimmedGrade,
               subject: currentSubject,
               mode: `${modeCount} Soal`,
               score: score,
@@ -1136,6 +1140,7 @@ export default function App() {
               score: (oldData.score || 0) + score,
               timeSpent: (oldData.timeSpent || 0) + timeSpent,
               date: new Date().toISOString(),
+              userId: firebaseUser.uid, // Update to current UID
               mode: `${modeCount} Soal (Update)`
             });
           }
