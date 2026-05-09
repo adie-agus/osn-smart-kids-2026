@@ -1,0 +1,46 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Entity Validations
+    function isValidLeaderboardEntry(data) {
+      return data.keys().hasAll(['userId', 'name', 'school', 'grade', 'subject', 'mode', 'score', 'timeSpent', 'date'])
+        && data.keys().size() == 9
+        && data.userId == request.auth.uid 
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.school is string && data.school.size() <= 150
+        && data.grade is string
+        && data.subject is string
+        && data.mode is string
+        && data.score is number && data.score >= 0 && data.score <= 100
+        && data.timeSpent is number && data.timeSpent >= 0
+        && data.date is string;
+    }
+
+    // Match for Leaderboard
+    match /leaderboard/{entryId} {
+      allow list: if true; // Publicly viewable leaderboard
+      allow get: if true;
+      allow create: if isSignedIn() && isValidLeaderboardEntry(request.resource.data);
+      allow update, delete: if false; // Scores are immutable for security
+    }
+  }
+}

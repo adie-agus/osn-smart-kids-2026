@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Google AI Studio App</title>
+    <script>
+      // Fix for "TypeError: Cannot set property fetch of #<Window> which has only a getter"
+      // Some libraries try to assign to window.fetch which is read-only in some environments.
+      (function() {
+        const originalFetch = window.fetch;
+        if (originalFetch && typeof Object.defineProperty === 'function') {
+          try {
+            Object.defineProperty(window, 'fetch', {
+              get: function() { return originalFetch; },
+              set: function() { 
+                console.warn('Attempted to overwrite window.fetch. This was blocked to prevent TypeError.');
+              },
+              configurable: true,
+              enumerable: true
+            });
+          } catch (e) {
+            // If already non-configurable, we can't do anything here, 
+            // but usually this script as the first thing in head will work.
+          }
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
