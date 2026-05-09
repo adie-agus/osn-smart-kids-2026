@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { auth, db } from './firebase';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, onSnapshot, query, orderBy, limit, doc, getDocFromServer } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, limit, doc, getDocFromServer, setDoc, getDoc, runTransaction, where } from 'firebase/firestore';
 
 // Types for Error Handling
 enum OperationType {
@@ -808,6 +808,7 @@ export default function App() {
   const [hiddenOptions, setHiddenOptions] = useState<number[]>([]);
   
   const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+  const [leaderboardSubject, setLeaderboardSubject] = useState<string>('SEMUA');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fb, setFb] = useState<any>(null);
   const [firebaseUser, setFirebaseUser] = useState<any>(null);
@@ -902,7 +903,13 @@ export default function App() {
     const { db } = fb;
     const lbPath = 'leaderboard';
     const lbRef = collection(db, lbPath);
-    const q = query(lbRef, orderBy('score', 'desc'), limit(50));
+    
+    let q;
+    if (leaderboardSubject === 'SEMUA') {
+      q = query(lbRef, orderBy('score', 'desc'), limit(50));
+    } else {
+      q = query(lbRef, where('subject', '==', leaderboardSubject), orderBy('score', 'desc'), limit(50));
+    }
 
     const unsubscribeLb = onSnapshot(q, 
       (snapshot) => {
@@ -917,7 +924,7 @@ export default function App() {
     );
 
     return () => unsubscribeLb();
-  }, [firebaseUser, fb]);
+  }, [fb, leaderboardSubject]);
 
   useEffect(() => {
     let timer;
@@ -1104,22 +1111,37 @@ export default function App() {
       setIsSubmitting(true);
       try {
         const { db } = fb;
-        const lbPath = 'leaderboard';
-        const lbRef = collection(db, lbPath);
-        
-        await addDoc(lbRef, {
-          userId: firebaseUser.uid,
-          name: userProfile.name,
-          school: userProfile.school,
-          grade: userProfile.grade,
-          subject: subject?.toUpperCase(),
-          mode: `${modeCount} Soal`,
-          score: score,
-          timeSpent: timeSpent,
-          date: new Date().toISOString()
+        const currentSubject = subject?.toUpperCase() || 'UMUM';
+        // Unique ID based on name, school, grade, and subject
+        const docId = `${userProfile.name}_${userProfile.school}_${userProfile.grade}_${currentSubject}`.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const docRef = doc(db, 'leaderboard', docId);
+
+        await runTransaction(db, async (transaction) => {
+          const sfDoc = await transaction.get(docRef);
+          if (!sfDoc.exists()) {
+            transaction.set(docRef, {
+              userId: firebaseUser.uid,
+              name: userProfile.name,
+              school: userProfile.school,
+              grade: userProfile.grade,
+              subject: currentSubject,
+              mode: `${modeCount} Soal`,
+              score: score,
+              timeSpent: timeSpent,
+              date: new Date().toISOString()
+            });
+          } else {
+            const oldData = sfDoc.data();
+            transaction.update(docRef, {
+              score: (oldData.score || 0) + score,
+              timeSpent: (oldData.timeSpent || 0) + timeSpent,
+              date: new Date().toISOString(),
+              mode: `${modeCount} Soal (Update)`
+            });
+          }
         });
       } catch (error) {
-        handleFirestoreError(error, OperationType.CREATE, 'leaderboard');
+        handleFirestoreError(error, OperationType.WRITE, 'leaderboard');
       }
       setIsSubmitting(false);
     }
@@ -1476,6 +1498,22 @@ export default function App() {
         <button onClick={() => setCurrentScreen('home')} className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-6 py-3 rounded-full font-bold hover:bg-gray-300 transition-colors">
           Tutup
         </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-6 animate-fade-in shrink-0">
+        {['SEMUA', 'MATEMATIKA', 'IPA', 'IPS'].map((subj) => (
+          <button
+            key={subj}
+            onClick={() => setLeaderboardSubject(subj)}
+            className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+              leaderboardSubject === subj
+                ? 'bg-indigo-500 text-white shadow-md scale-105'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+            }`}
+          >
+            {subj}
+          </button>
+        ))}
       </div>
 
       <div className="flex-grow overflow-y-auto custom-scrollbar pr-2 space-y-3">

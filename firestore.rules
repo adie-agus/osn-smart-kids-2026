@@ -30,7 +30,7 @@ service cloud.firestore {
         && data.grade is string
         && data.subject is string
         && data.mode is string
-        && data.score is number && data.score >= 0 && data.score <= 100
+        && data.score is number && data.score >= 0 && data.score <= 1000000
         && data.timeSpent is number && data.timeSpent >= 0
         && data.date is string;
     }
@@ -40,7 +40,10 @@ service cloud.firestore {
       allow list: if true; // Publicly viewable leaderboard
       allow get: if true;
       allow create: if isSignedIn() && isValidLeaderboardEntry(request.resource.data);
-      allow update, delete: if false; // Scores are immutable for security
+      allow update: if isSignedIn() 
+        && request.auth.uid == resource.data.userId
+        && isValidLeaderboardEntry(request.resource.data);
+      allow delete: if false;
     }
   }
 }
